@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Employee Login - Watraco</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
+  .box{background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.08);width:360px;text-align:center}
+  input{width:100%;padding:10px;margin:10px 0;border-radius:8px;border:1px solid #ddd;box-sizing:border-box}
+  button{width:100%;padding:12px;border-radius:8px;border:none;background:#007bff;color:#fff;font-weight:700;cursor:pointer}
+  .error{color:#c0392b;margin-top:8px}
+  a{color:#2d9cdb;text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h2>Employee Login</h2>
+    <input id="username" placeholder="Username" autocomplete="username" />
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="loginBtn">Login</button>
+    <div id="err" class="error" aria-live="polite"></div>
+    <p style="margin-top:12px"><a href="track.html">Customer: Track a shipment</a></p>
+  </div>
+
+  <script>
+    // Hardcoded credentials (demo). Username & password requested by you.
+    const EMP_USER = "watraco";
+    const EMP_PASS = "societewatraco";
+
+    const loginBtn = document.getElementById('loginBtn');
+    loginBtn.addEventListener('click', () => {
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value;
+      const err = document.getElementById('err');
+      err.textContent = '';
+
+      if (u === EMP_USER && p === EMP_PASS) {
+        // Mark employee session in localStorage
+        localStorage.setItem('employeeAuth', 'true');
+        // Redirect to generate page
+        location.href = 'generate.html';
+      } else {
+        err.textContent = 'Invalid username or password.';
+      }
+    });
+  </script>
+</body>
+</html>

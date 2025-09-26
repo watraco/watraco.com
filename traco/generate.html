@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Generate Shipment - Watraco</title>
+<style>
+  /* Basic form layout */
+  body{font-family:Arial,Helvetica,sans-serif;background:#f5f8fb;margin:0;padding:28px}
+  .container{max-width:760px;margin:20px auto;background:#fff;padding:22px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.06)}
+  label{display:block;margin-top:10px;font-weight:600}
+  input,select,button{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #ddd;box-sizing:border-box}
+  button.primary{background:#2d9cdb;color:#fff;border:none;font-weight:700;cursor:pointer;padding:12px}
+  .small{max-width:240px;display:inline-block}
+  a.link{color:#2d9cdb;text-decoration:none}
+  /* popup */
+  .popup-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);visibility:hidden}
+  .popup-card{background:#fff;padding:20px;border-radius:12px;max-width:420px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.12)}
+  .popup-card p{font-weight:700;font-size:18px;margin:14px 0}
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Create Shipment (Employee)</h1>
+    <p>Employees only: create shipments and generate tracking IDs.</p>
+
+    <!-- show a warning & redirect if not logged in -->
+    <div id="authWarning" style="color:#c0392b;display:none;margin-bottom:10px;">Not authenticated — redirecting to login...</div>
+
+    <!-- Form -->
+    <label for="owner">Customer / Owner name</label>
+    <input id="owner" placeholder="e.g., John Doe" />
+
+    <label for="origin">Origin (Country / City)</label>
+    <input id="origin" placeholder="e.g., Lagos, Nigeria" />
+
+    <label for="destination">Destination (Country / City)</label>
+    <input id="destination" placeholder="e.g., Togo, Ghana" />
+
+    <label for="unit">Duration unit</label>
+    <select id="unit">
+      <option value="days">Days</option>
+      <option value="hours">Hours</option>
+      <option value="minutes">Minutes</option>
+    </select>
+
+    <div id="durationWrapper">
+      <label for="durationVal">Duration value</label>
+      <input id="durationVal" type="number" min="1" value="1" />
+    </div>
+
+    <button id="createBtn" class="primary">Generate Tracking ID</button>
+
+    <p style="margin-top:12px"><a class="link" href="track.html">Customer: Track a shipment</a></p>
+  </div>
+
+  <!-- Popup -->
+  <div class="popup-overlay" id="popup">
+    <div class="popup-card">
+      <h2>Your Tracking ID</h2>
+      <p id="popupId">&nbsp;</p>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+        <button id="copyBtn" class="small">Copy</button>
+        <button id="openProgressBtn" class="small">Open Progress</button>
+        <button id="gotoTrackBtn" class="small">Go to Track Page</button>
+      </div>
+      <div style="margin-top:10px"><button id="closePopup">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Firebase modular SDK -->
+  <script type="module">
+    // --- FIREBASE INIT ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCmHuvaDlbDH1u6SNIN85kJsiHE9Zgle3E",
+      authDomain: "watraco-1a955.firebaseapp.com",
+      projectId: "watraco-1a955",
+      storageBucket: "watraco-1a955.firebasestorage.app",
+      messagingSenderId: "67246086407",
+      appId: "1:67246086407:web:4d9d80ff51349def90cda2",
+      measurementId: "G-SECBFBWMB2"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    // --- end firebase init ---
+
+    // Require employee login (hardcoded flow)
+    if (localStorage.getItem('employeeAuth') !== 'true') {
+      document.getElementById('authWarning').style.display = 'block';
+      setTimeout(() => location.href = 'employee-login.html', 900);
+      throw new Error('Employee not authenticated');
+    }
+
+    // DOM
+    const createBtn = document.getElementById('createBtn');
+    const popup = document.getElementById('popup');
+    const popupId = document.getElementById('popupId');
+    const copyBtn = document.getElementById('copyBtn');
+    const openProgressBtn = document.getElementById('openProgressBtn');
+    const gotoTrackBtn = document.getElementById('gotoTrackBtn');
+    const closePopupBtn = document.getElementById('closePopup');
+
+    // helper: generate tracking id (owner name + 5 digits)
+    function generateTrackingId(owner) {
+      const clean = (owner || 'WTR').replace(/\s+/g, '').toUpperCase();
+      const rand = Math.floor(10000 + Math.random() * 90000);
+      return clean + rand;
+    }
+
+    // convert unit+value to milliseconds
+    function durationToMs(value, unit) {
+      const v = Number(value) || 0;
+      if (unit === 'days') return v * 24 * 60 * 60 * 1000;
+      if (unit === 'hours') return v * 60 * 60 * 1000;
+      return v * 60 * 1000;
+    }
+
+    // create shipment handler
+    createBtn.addEventListener('click', async () => {
+      createBtn.disabled = true; // prevent double click
+      const owner = document.getElementById('owner').value.trim();
+      const origin = document.getElementById('origin').value.trim();
+      const destination = document.getElementById('destination').value.trim();
+      const unit = document.getElementById('unit').value;
+      const val = document.getElementById('durationVal').value;
+
+      if (!owner || !origin || !destination || !unit || !val) {
+        alert('Please fill all fields.');
+        createBtn.disabled = false;
+        return;
+      }
+
+      // compute duration and id
+      const durationMs = durationToMs(val, unit);
+      const trackingId = generateTrackingId(owner);
+
+      // Save to Firestore. We write startTimeMs (client time) so progress begins immediately.
+      // We also include createdAt serverTimestamp for record.
+      try {
+        await setDoc(doc(db, 'shipments', trackingId), {
+          owner,
+          origin,
+          destination,
+          durationMs,
+          startTimeMs: Date.now(),    // client timestamp to start immediately
+          createdAt: serverTimestamp() // server timestamp for records
+        });
+      } catch (err) {
+        console.error('Failed to save shipment', err);
+        alert('Failed to create shipment: ' + (err.message || err));
+        createBtn.disabled = false;
+        return;
+      }
+
+      // show popup with actions
+      popupId.textContent = trackingId;
+      popup.style.visibility = 'visible';
+      createBtn.disabled = false;
+    });
+
+    // copy with fallback
+    copyBtn.addEventListener('click', async () => {
+      const id = popupId.textContent;
+      try {
+        await navigator.clipboard.writeText(id);
+        alert('Copied to clipboard: ' + id);
+      } catch {
+        const ta = document.createElement('textarea'); ta.value = id; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+        alert('Copied (fallback): ' + id);
+      }
+    });
+
+    // open progress (in a new tab)
+    openProgressBtn.addEventListener('click', () => {
+      const id = popupId.textContent;
+      // save to local storage as well (convenience)
+      localStorage.setItem('currentTracking', id);
+      // open progress page with id param
+      window.open(`progress.html?id=${encodeURIComponent(id)}`, '_blank');
+    });
+
+    // go to track page (user may want to paste id there)
+    gotoTrackBtn.addEventListener('click', () => {
+      const id = popupId.textContent;
+      localStorage.setItem('currentTracking', id);
+      location.href = 'track.html';
+    });
+
+    closePopupBtn.addEventListener('click', () => popup.style.visibility = 'hidden');
+  </script>
+</body>
+</html>
