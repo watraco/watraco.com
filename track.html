@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Track Shipment - Watraco</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#f7f9fb;margin:0;padding:36px}
+  .box{max-width:520px;margin:40px auto;background:#fff;padding:22px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.06)}
+  input,button{width:100%;padding:12px;margin:10px 0;border-radius:8px;border:1px solid #ddd;box-sizing:border-box}
+  button.primary{background:#2d9cdb;color:#fff;border:none;font-weight:700;cursor:pointer}
+  button.primary[disabled]{opacity:0.6;cursor:not-allowed}
+  a.link{color:#2d9cdb;text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h2>Track your shipment</h2>
+    <p>Enter the tracking ID provided by the sender. Example: JOHN12345</p>
+    <input id="trackInput" placeholder="Enter tracking ID" />
+    <button id="trackBtn" class="primary">Open progress</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Firebase config (your project)
+  const firebaseConfig = {
+    apiKey: "AIzaSyCHCq9q3peyR_dqgv6FQrrOZKeLCwjaMk4",
+    authDomain: "watraco-5176c.firebaseapp.com",
+    projectId: "watraco-5176c",
+    storageBucket: "watraco-5176c.firebasestorage.app",
+    messagingSenderId: "1025024799319",
+    appId: "1:1025024799319:web:a5f16d9acc9e8e1d326912",
+    measurementId: "G-14J960XN8Z"
+  };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const trackBtn = document.getElementById('trackBtn');
+    trackBtn.addEventListener('click', async () => {
+      const id = document.getElementById('trackInput').value.trim();
+      if (!id) return alert('Please enter a tracking ID.');
+      // Prevent double click
+      trackBtn.disabled = true;
+
+      try {
+        const ref = doc(db, 'shipments', id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+          alert('Tracking ID not found.');
+          trackBtn.disabled = false;
+          return;
+        }
+        // If there is no startTimeMs, set it now (so progress begins)
+        const data = snap.data();
+        if (!data.startTimeMs) {
+          try { await updateDoc(ref, { startTimeMs: Date.now(), startedAt: serverTimestamp() }); } catch(e){ /* ignore */ }
+        }
+        // Save currentTracking locally (convenience), then redirect to progress with id param
+        localStorage.setItem('currentTracking', id);
+        location.href = `progress.html?id=${encodeURIComponent(id)}`;
+      } catch (err) {
+        console.error(err);
+        alert('Error: ' + (err.message || err));
+      } finally {
+        trackBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
